@@ -1,8 +1,17 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jsonflutter/environment.dart';
+
+import 'package:jsonflutter/models/models.dart';
+import 'package:jsonflutter/services/product_dealer_api.dart';
 
 void main() {
+  const String environment = String.fromEnvironment(
+    'ENVIRONMENT',
+    defaultValue: Environment.DEV,
+  );
+  Environment().initConfig(environment);
   runApp(MyApp());
 }
 
@@ -32,10 +41,13 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _loadProductData() async {
     final String response =
         await rootBundle.loadString('assets/template_.json');
-    final data = await json.decode(response);
+    List<dynamic> data = await json.decode(response);
+    List<Product> productArray =
+        data.map((json) => Product.fromJson(json)).toList();
+
     setState(() {
-      for (Map<String, dynamic> item in data) {
-        products.add(Product.fromJson(item));
+      for (Product item in productArray) {
+        products.add(item);
       }
     });
   }
@@ -81,11 +93,13 @@ class _MyHomePageState extends State<MyHomePage> {
                         (int index) => DataRow(
                           cells: <DataCell>[
                             DataCell(
+                              //products[index].productImage != null ?
                               Image.network(
                                 products[index].productImage,
                                 width: 50,
                                 height: 50,
                               ),
+                              //: Image.asset('assets/my_image.png'),
                             ),
                             DataCell(Text(products[index].code)),
                             DataCell(Text(products[index].name1)),
@@ -104,34 +118,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 icon: Icon(Icons.send),
                                 color: Colors.blue,
                                 onPressed: () {
-                                  showAboutDialog(
-                                    context: context,
-                                    applicationName: "My Flutter App",
-                                    applicationVersion: "1.0.0",
-                                    applicationIcon: Icon(Icons.ad_units_sharp),
-                                    children: [
-                                      Text("รหัส: " + products[index].code),
-                                      Text("ชื่อ: " + products[index].name1),
-                                      Text(
-                                          "หน่วย: " + products[index].unitCost),
-                                      Text("ราคา: " +
-                                          products[index]
-                                              .priceRecommended
-                                              .toString()),
-                                      Text("รหัสภาษี: " +
-                                          products[index].taxType.toString()),
-                                      Text("รหัสยูนิต: " +
-                                          products[index]
-                                              .units[0]
-                                              .code
-                                              .toString()),
-                                      Text("รหัสตัวแทนจำหน่าย: " +
-                                          products[index]
-                                              .dealers
-                                              .map((e) => e.dealerCode)
-                                              .join(', ')),
-                                    ],
-                                  );
+                                  syncProductApi(products[index]);
                                 },
                               ),
                             ),
@@ -267,86 +254,33 @@ class _MyHomePageState extends State<MyHomePage> {
                 )
               ]))));
   }
-}
 
-class Product {
-  final String code;
-  final String name1;
-  final String unitCost;
-  final int priceRecommended;
-  final int taxType;
-  final List<Unit> units;
-  final List<Dealer> dealers;
-  final String productImage;
-
-  Product({
-    required this.code,
-    required this.name1,
-    required this.unitCost,
-    required this.priceRecommended,
-    required this.taxType,
-    required this.units,
-    required this.dealers,
-    required this.productImage,
-  });
-
-  factory Product.fromJson(Map<String, dynamic> json) {
-    var unitList = json['units'] as List;
-    List<Unit> unitTempList = unitList.map((i) => Unit.fromJson(i)).toList();
-
-    var dealerList = json['dealers'] as List;
-    List<Dealer> dealerTempList =
-        dealerList.map((i) => Dealer.fromJson(i)).toList();
-
-    return Product(
-      code: json['code'],
-      name1: json['name_1'],
-      unitCost: json['unit_cost'],
-      priceRecommended: json['price_recommended'],
-      taxType: json['tax_type'],
-      units: unitTempList,
-      dealers: dealerTempList,
-      productImage: json['product_image'],
+  sendProductDialog(BuildContext context, Product product) {
+    showAboutDialog(
+      context: context,
+      applicationName: "My Flutter App",
+      applicationVersion: "1.0.0",
+      applicationIcon: const Icon(Icons.ad_units_sharp),
+      children: [
+        Text("รหัส: ${product.code}"),
+        Text("ชื่อ: ${product.name1}"),
+        Text("หน่วย: ${product.unitCost}"),
+        Text("ราคา: ${product.priceRecommended}"),
+        Text("รหัสภาษี: ${product.taxType}"),
+        Text("รหัสยูนิต: ${product.units[0].code}"),
+        Text(
+            "รหัสตัวแทนจำหน่าย: ${product.dealers.map((e) => e.dealerCode).join(', ')}"),
+      ],
     );
   }
-}
 
-class Unit {
-  final String code;
-  final int lineNumber;
-  final int standValue;
-  final int divideValue;
-  final int rowOrder;
-
-  Unit({
-    required this.code,
-    required this.lineNumber,
-    required this.standValue,
-    required this.divideValue,
-    required this.rowOrder,
-  });
-
-  factory Unit.fromJson(Map<String, dynamic> json) {
-    return Unit(
-      code: json['code'],
-      lineNumber: json['line_number'],
-      standValue: json['stand_value'],
-      divideValue: json['divide_value'],
-      rowOrder: json['row_order'],
-    );
-  }
-}
-
-class Dealer {
-  final String dealerCode;
-  final bool isSync;
-
-  Dealer({required this.dealerCode, required this.isSync});
-
-  factory Dealer.fromJson(Map<String, dynamic> json) {
-    return Dealer(
-      dealerCode: json['dealercode'],
-      isSync: json['issync'],
-    );
+  Future<void> syncProductApi(Product p) async {
+    ProductDealerApi api = ProductDealerApi();
+    ApiResponse response = await api.SendProductSync(p);
+    if (response.success) {
+      print('success');
+    } else {
+      print('fail');
+    }
   }
 }
